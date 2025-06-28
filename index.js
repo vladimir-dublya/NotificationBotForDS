@@ -25,7 +25,7 @@ async function checkVoiceChannelUsers() {
     for (const channel of voiceChannels.values()) {
       const members = channel.members
       if (members.size > 0) {
-        const usernames = [...members.values()].map((m) => m.user.username)
+        const usernames = [...members.values()].map((m) => m.user.globalName)
         messages.push(
           `В голосовом канале "${channel.name}" находятся: ${usernames.join(', ')}`
         )
@@ -41,22 +41,6 @@ telegramBot.onText(/\/check/, async (msg) => {
 
   const message = await checkVoiceChannelUsers()
   telegramBot.sendMessage(msg.chat.id, message)
-})
-
-discordClient.on('voiceStateUpdate', async (oldState, newState) => {
-  const joinedChannel = newState.channelId
-  const leftChannel = oldState.channelId
-  const user = newState.member?.user
-
-  if (
-    joinedChannel &&
-    joinedChannel !== leftChannel &&
-    WATCHED_CHANNEL_IDS.includes(joinedChannel)
-  ) {
-    const channelName = newState.channel?.name || 'Unknown channel'
-    const message = `${user.username} вошёл в голосовой канал: ${channelName}`
-    telegramBot.sendMessage(TELEGRAM_CHAT_ID, message)
-  }
 })
 
 discordClient.once('ready', () => {
