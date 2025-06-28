@@ -1,33 +1,23 @@
 require('dotenv').config()
 const { Client, GatewayIntentBits } = require('discord.js')
+const TelegramBot = require('node-telegram-bot-api')
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildVoiceStates,
-  ],
-})
-
-const TELEGRAM_URL = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN
 const WATCHED_CHANNEL_IDS = process.env.CHANNEL_IDS.split(',')
 
-async function sendTelegramMessage(message) {
-  await fetch(TELEGRAM_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      text: message,
-    }),
-  })
-}
+const discordClient = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+})
 
-client.on('ready', async () => {
-  console.log(`Bot is ready as ${client.user.tag}`)
+const telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true })
 
-  for (const guild of client.guilds.cache.values()) {
-    await guild.channels.fetch() // Ensure channels are cached
+async function checkVoiceChannelUsers() {
+  let messages = []
+
+  for (const guild of discordClient.guilds.cache.values()) {
+    await guild.channels.fetch()
     const voiceChannels = guild.channels.cache.filter(
       (channel) => WATCHED_CHANNEL_IDS.includes(channel.id)
     )
@@ -35,15 +25,25 @@ client.on('ready', async () => {
     for (const channel of voiceChannels.values()) {
       const members = channel.members
       if (members.size > 0) {
-        const usernames = [...members.values()].map((member) => member.user.username)
-        const message = `При запуске бота обнаружено: ${usernames.join(', ')} находятся в голосовом канале: ${channel.name}`
-        await sendTelegramMessage(message)
+        const usernames = [...members.values()].map((m) => m.user.username)
+        messages.push(
+          `В голосовом канале "${channel.name}" находятся: ${usernames.join(', ')}`
+        )
       }
     }
   }
+
+  return messages.length > 0 ? messages.join('\n') : 'В избранных каналах никого нет.'
+}
+
+telegramBot.onText(/\/check/, async (msg) => {
+  if (msg.chat.id.toString() !== TELEGRAM_CHAT_ID) return
+
+  const message = await checkVoiceChannelUsers()
+  telegramBot.sendMessage(msg.chat.id, message)
 })
 
-client.on('voiceStateUpdate', async (oldState, newState) => {
+discordClient.on('voiceStateUpdate', async (oldState, newState) => {
   const joinedChannel = newState.channelId
   const leftChannel = oldState.channelId
   const user = newState.member?.user
@@ -55,8 +55,12 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   ) {
     const channelName = newState.channel?.name || 'Unknown channel'
     const message = `${user.username} вошёл в голосовой канал: ${channelName}`
-    await sendTelegramMessage(message)
+    telegramBot.sendMessage(TELEGRAM_CHAT_ID, message)
   }
 })
 
-client.login(process.env.DISCORD_BOT_TOKEN)
+discordClient.once('ready', () => {
+  console.log(`Discord bot is ready as ${discordClient.user.tag}`)
+})
+
+discordClient.login(DISCORD_BOT_TOKEN)

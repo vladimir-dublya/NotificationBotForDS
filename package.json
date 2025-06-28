@@ -3,6 +3,10 @@
     "discord.js": "^14.21.0",
     "dotenv": "^17.0.0",
     "node-fetch": "^3.3.2",
+    "node-telegram-bot-api": "^0.66.0",
     "nodemon": "^3.1.10"
+  },
+  "scripts": {
+    "dev": "npx nodemon index.js"
   }
 }
